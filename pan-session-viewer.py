@@ -16,7 +16,7 @@ requests.packages.urllib3.disable_warnings()
 
 
 ##############################################
-# CONNECT THREAD
+# GENERATE AND RETURN API KEY
 ##############################################
 class ConnectThread(QtCore.QThread):
 
@@ -96,7 +96,7 @@ class ConnectThread(QtCore.QThread):
         self.connect_values.emit(connect_values)
 
     ##############################################
-    # API DRIVER
+    # KEYGEN API DRIVER
     ##############################################
     def keygen(self):
         """
@@ -150,12 +150,12 @@ class ConnectThread(QtCore.QThread):
 ##############################################
 # GET CONFIG DATA TO FILL COMBO BOXES
 ##############################################
-class ToComboBoxes(QtCore.QThread):
+class GetRunningConfig(QtCore.QThread):
 
     combo_box_values = QtCore.pyqtSignal(dict)
 
     def __init__(self, api, url, parent=None):
-        super(ToComboBoxes, self).__init__(parent)
+        super(GetRunningConfig, self).__init__(parent)
         self.is_running = True
         self.api = api
         self.url = url
@@ -345,7 +345,7 @@ class GetDetailedSession(QtCore.QThread):
 
 
 ##############################################
-# SESSION DETAIL WINDOW
+# SESSION DETAIL UI WINDOW
 ##############################################
 class SessionDetailWindow(QMainWindow):
     def __init__(self, session_id, api, url, parent=None):
@@ -440,6 +440,10 @@ class SessionDetailWindow(QMainWindow):
         self.ui.lbl_tunnel.setText(self._get_xml_text(self.session, './tunnel-session'))
         self.ui.lbl_cp.setText(self._get_xml_text(self.session, './captive-portal'))
         self.ui.lbl_egress_intf.setText(self._get_xml_text(self.session, './egr-if'))
+        self.ui.lbl_nat_rule.setText(self._get_xml_text(self.session, './nat-rule'))
+        self.ui.lbl_dnat.setText(self._get_xml_text(self.session, './nat-dst'))
+        self.ui.lbl_srcnat.setText(self._get_xml_text(self.session, './nat-src'))
+        self.ui.lbl_url_cat.setText(self._get_xml_text(self.session, './url-cat'))
 
         # Indicate time of last refresh
         self.ui.lbl_refreshtime.setText(datetime.datetime.now().strftime('%H:%M:%S'))
@@ -459,7 +463,7 @@ class SessionDetailWindow(QMainWindow):
 
 
 ##############################################
-# MAIN WINDOW
+# MAIN UI WINDOW
 ##############################################
 class PanSessionViewerMainWindow(QMainWindow):
     def __init__(self):
@@ -611,10 +615,10 @@ class PanSessionViewerMainWindow(QMainWindow):
             # trigger functions to fill combo boxes
             self._system_info()
 
-            self.connect_thread_combo_boxes = ToComboBoxes(parent=None, api=self._api, url=self._url)
-            self.connect_thread_combo_boxes.start()
-            self.connect_thread_combo_boxes.combo_box_values.connect(self._fill_to_combo_boxes)
-            self.connect_thread_combo_boxes.quit()
+            self.connect_thread_get_config = GetRunningConfig(parent=None, api=self._api, url=self._url)
+            self.connect_thread_get_config.start()
+            self.connect_thread_get_config.combo_box_values.connect(self._fill_combo_boxes)
+            self.connect_thread_get_config.quit()
 
         else:
             self.ui.button_connect.setStyleSheet('background-color: red; color:white;')
@@ -622,7 +626,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             self._show_critical_error([values['response'], values['error']])
 
     ##############################################
-    # SYSTEM INFO
+    # ADD SYSTEM INFO TO STATUS BAR
     ##############################################
     def _system_info(self):
         """
@@ -643,9 +647,9 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.ui.statusbar.showMessage('Model: {m} {x:5}|{x:5}Device Name: {d} {x:5}|{x:5}SW Version: {s}'.format(m=model, d=self._device, s=self._sw, x=''))
 
     ##############################################
-    # FILL TO COMBO BOXES
+    # POPULATE COMBO BOXES
     ##############################################
-    def _fill_to_combo_boxes(self, values):
+    def _fill_combo_boxes(self, values):
         """
         Sets the combo boxes showing zones and interfaces
         """
@@ -661,7 +665,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.ui.output_area.append('> {error}'.format(error=values['error']))
             return None
 
-        # check if Panorama - we can only run against firewalls...
+        # check if Panorama - if so, error out; we can only run against firewalls...
         panorama_exists = self._running_config.find('.//panorama')
 
         if panorama_exists is not None:
@@ -712,13 +716,13 @@ class PanSessionViewerMainWindow(QMainWindow):
             parent=None
         )
         self.connect_thread_get_sessions.start()
-        self.connect_thread_get_sessions.get_session_values.connect(self._output_sessions)
+        self.connect_thread_get_sessions.get_session_values.connect(self._display_sessions)
         self.connect_thread_get_sessions.quit()
 
     ##############################################################
-    # OUTPUT SESSIONS TO TEXT AREA
+    # POPULATE SESSION TABLE WIDGET
     ##############################################################
-    def _output_sessions(self, session_values):
+    def _display_sessions(self, session_values):
         # Check if our search returned any results
         if session_values['result'] is True and lxml.fromstring(session_values['response']).get('status') == 'success':
             self._session_table = lxml.fromstring(session_values['response'])
@@ -730,17 +734,15 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.ui.output_area.append('> {error}'.format(error=session_values['error']))
             return None
 
-        # Populate list widget with sessions
+        # Populate table widget with sessions
         # NOTE: There is no XML 'attribute' present in the session entries, so we must look for the Element instead
         self.session_list = self._session_table.findall(".//entry")
 
         if len(self.session_list) > 0:
+            # Check that we have at least one session in our search results
             for session in self.session_list:
-                # Get lazy, and just print to the text area to see if it works
-                # self.ui.output_area.append('> Session {a} FromZone {b} SrcAddr {c} ToZone {d} DstAddr {e} DstPort {f}'.format(a=session.find('idx').text, b=session.find('from').text, c=session.find('source').text, d=session.find('to').text, e=session.find('dst').text, f=session.find('dport').text))
-
-                # Insert session into sqlite database; update the existing entry if there's already one with the same ID
-                sql = '''INSERT OR REPLACE INTO SESSIONS (id, vsys, application, state, type, srczone, srcaddress, srcport, dstzone, dstaddress, dstport) VALUES (?,?,?,?,?,?,?,?,?,?,?);'''
+                # Insert session into sqlite database; replace the existing entry if there's already one with the same ID
+                sql = '''REPLACE INTO SESSIONS (id, vsys, application, state, type, srczone, srcaddress, srcport, dstzone, dstaddress, dstport) VALUES (?,?,?,?,?,?,?,?,?,?,?);'''
                 try:
                     self.db_cur.execute(sql, [session.find('idx').text, session.find('vsys').text,
                                               session.find('application').text, session.find('state').text,
@@ -752,7 +754,7 @@ class PanSessionViewerMainWindow(QMainWindow):
                 except sqlite3.Error as e:
                     self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
 
-            # Summarize our output actions
+            # Log how many entries we have in the database now
             sql = '''SELECT count(*) FROM SESSIONS;'''
             try:
                 self.db_cur.execute(sql)
@@ -761,7 +763,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             except sqlite3.Error as e:
                 self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
 
-            # Reset session output table to prepare for update
+            # Erase session output table to prepare for update
             self.ui.tableSessions.clear()
             self.ui.tableSessions.setColumnCount(11)
             self.ui.tableSessions.setHorizontalHeaderLabels("Session ID;VSYS;Application;State;Type;Src Zone;Src Address;Src Port;Dst Zone;Dst Address;Dst Port".split(";"))
@@ -781,6 +783,7 @@ class PanSessionViewerMainWindow(QMainWindow):
                     self.ui.tableSessions.setItem(row, column, QTableWidgetItem(str(item)))
 
         else:
+            # If no sessions matched our query, log it
             self.ui.output_area.append('> No sessions matched query!')
 
     ##############################################
@@ -805,7 +808,6 @@ class PanSessionViewerMainWindow(QMainWindow):
 
         # Retry
         else:
-
             # set error flag to True -- implies error
             self._flag_error = True
             return
@@ -814,13 +816,13 @@ class PanSessionViewerMainWindow(QMainWindow):
     # CLOSE EVENT
     #################################################
     def closeEvent(self, event):
-        # If something triggered a force close, don't ask if the user wants to quit
+        # If something triggered a force close, don't ask if the user wants to quit - that'd be silly
         if self.force_close is True:
             event.accept()
 
         else:
             # Give the user a choice
-            reply = QMessageBox.question(self, 'Message', "Are you sure you want to quit?", QMessageBox.Yes, QMessageBox.No)
+            reply = QMessageBox.question(self, 'Confirm', "Are you sure you want to quit?", QMessageBox.Yes, QMessageBox.No)
 
             if reply == QMessageBox.Yes:
                 event.accept()
@@ -831,12 +833,16 @@ class PanSessionViewerMainWindow(QMainWindow):
     # SHOW SESSION DETAIL WINDOW
     #################################################
     def _show_session_detail(self, row, column):
+        # column variable not used here, but needs to be defined as it's included by the signal
+
         # Get the ID of the session that was clicked
         session_id = self.ui.tableSessions.item(row, 0).text()
 
         # Launch the new window, with necessary parameters included
         self.session_detail = SessionDetailWindow(session_id, self._api, self._url)
         self.session_detail.show()
+
+        # Add window to a List of windows - allows multiple to be visible at once
         self.DetailWindows.append(self.session_detail)
 
 
@@ -846,6 +852,8 @@ class PanSessionViewerMainWindow(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
+
+    # Create color scheme
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(53, 53, 53))
     palette.setColor(QPalette.WindowText, QtCore.Qt.white)
@@ -857,10 +865,15 @@ if __name__ == '__main__':
     palette.setColor(QPalette.Button, QColor(53, 53, 53))
     palette.setColor(QPalette.ButtonText, QtCore.Qt.white)
     palette.setColor(QPalette.BrightText, QtCore.Qt.red)
-
     palette.setColor(QPalette.Highlight, QColor(25, 193, 255).lighter())
     palette.setColor(QPalette.HighlightedText, QtCore.Qt.black)
+
+    # Apply color scheme
     app.setPalette(palette)
+
+    # Define main window, then show it
     main = PanSessionViewerMainWindow()
     main.show()
+
+    # Execute the QApplication; exit the script when the application is closed
     sys.exit(app.exec_())
