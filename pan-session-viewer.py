@@ -440,6 +440,10 @@ class SessionDetailWindow(QMainWindow):
         self.ui.lbl_tunnel.setText(self._get_xml_text(self.session, './tunnel-session'))
         self.ui.lbl_cp.setText(self._get_xml_text(self.session, './captive-portal'))
         self.ui.lbl_egress_intf.setText(self._get_xml_text(self.session, './egr-if'))
+        self.ui.lbl_nat_rule.setText(self._get_xml_text(self.session, './nat-rule'))
+        self.ui.lbl_dnat.setText(self._get_xml_text(self.session, './nat-dst'))
+        self.ui.lbl_srcnat.setText(self._get_xml_text(self.session, './nat-src'))
+        self.ui.lbl_url_cat.setText(self._get_xml_text(self.session, './url-cat'))
 
         # Indicate time of last refresh
         self.ui.lbl_refreshtime.setText(datetime.datetime.now().strftime('%H:%M:%S'))
@@ -736,11 +740,8 @@ class PanSessionViewerMainWindow(QMainWindow):
 
         if len(self.session_list) > 0:
             for session in self.session_list:
-                # Get lazy, and just print to the text area to see if it works
-                # self.ui.output_area.append('> Session {a} FromZone {b} SrcAddr {c} ToZone {d} DstAddr {e} DstPort {f}'.format(a=session.find('idx').text, b=session.find('from').text, c=session.find('source').text, d=session.find('to').text, e=session.find('dst').text, f=session.find('dport').text))
-
                 # Insert session into sqlite database; update the existing entry if there's already one with the same ID
-                sql = '''INSERT OR REPLACE INTO SESSIONS (id, vsys, application, state, type, srczone, srcaddress, srcport, dstzone, dstaddress, dstport) VALUES (?,?,?,?,?,?,?,?,?,?,?);'''
+                sql = '''REPLACE INTO SESSIONS (id, vsys, application, state, type, srczone, srcaddress, srcport, dstzone, dstaddress, dstport) VALUES (?,?,?,?,?,?,?,?,?,?,?);'''
                 try:
                     self.db_cur.execute(sql, [session.find('idx').text, session.find('vsys').text,
                                               session.find('application').text, session.find('state').text,
