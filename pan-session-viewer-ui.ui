@@ -350,6 +350,19 @@
      <string>Double-Click Session to View Detailed Information</string>
     </property>
    </widget>
+   <widget class="QCheckBox" name="chkbox_refresh_discovered">
+    <property name="geometry">
+     <rect>
+      <x>900</x>
+      <y>390</y>
+      <width>191</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Auto-Refresh Discovered Sessions</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>

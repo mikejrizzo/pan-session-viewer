@@ -6,13 +6,35 @@ import requests
 import sys
 import socket
 import sqlite3
+import time
 import datetime
+import sched
 from qt_pan_session_viewer_ui import Ui_MainWindow
 from qt_session_detail_ui import Ui_SessionDetail
 
 
 # suppress warnings from requests library
 requests.packages.urllib3.disable_warnings()
+
+
+##############################################
+# API REQUEST FUNCTION
+##############################################
+def api_request(url, values):
+    """
+    API request driver
+    values parameter must be a dictionary with the following format:
+    {'type': _api_operation_type_, 'cmd': _command_, 'key': _key_}
+
+    Returns contents of the server response, in unicode (direct output from requests.post().text)
+    """
+
+    try:
+        return True, requests.post(url, values, verify=False, timeout=10).text, None
+    except requests.exceptions.ConnectionError as error_api:
+        return False, 'Error connecting to {url} - Check IP Address'.format(url=url), error_api
+    except requests.exceptions.Timeout as error_timeout:
+        return None, 'Connection to {url} timed out, please try again'.format(url=url), error_timeout
 
 
 ##############################################
@@ -104,7 +126,7 @@ class ConnectThread(QtCore.QThread):
         """
 
         values = {'type': 'keygen', 'user': self.user, 'password': self.password}
-        result, response, error = self.api_request(values)
+        result, response, error = api_request(self.url, values)
 
         try:
             # if API call was successful
@@ -130,21 +152,6 @@ class ConnectThread(QtCore.QThread):
         # if timeout
         except requests.Timeout as error_timeout:
             return False, 'Connection to {ip} timed out, please try again'.format(ip=self.ip), error_timeout
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.ip), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.ip), error_timeout
 
 
 ##############################################
@@ -174,24 +181,9 @@ class GetRunningConfig(QtCore.QThread):
             'cmd': '<show><config><saved>running-config.xml</saved></config></show>'
         }
 
-        combo_box_values['result'], combo_box_values['response'], combo_box_values['error'] = self.api_request(values)
+        combo_box_values['result'], combo_box_values['response'], combo_box_values['error'] = api_request(self.url, values)
 
         self.combo_box_values.emit(combo_box_values)
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
 
 
 ##############################################
@@ -276,24 +268,9 @@ class GetSessionData(QtCore.QThread):
             )
         }
 
-        get_session_values['result'], get_session_values['response'], get_session_values['error'] = self.api_request(values)
+        get_session_values['result'], get_session_values['response'], get_session_values['error'] = api_request(self.url, values)
 
         self.get_session_values.emit(get_session_values)
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
 
 
 ##############################################
@@ -324,24 +301,9 @@ class GetDetailedSession(QtCore.QThread):
             'cmd': '<show><session><id>{a}</id></session></show>'.format(a=self.session_id)
         }
 
-        get_session_details['result'], get_session_details['response'], get_session_details['error'] = self.api_request(values)
+        get_session_details['result'], get_session_details['response'], get_session_details['error'] = api_request(self.url, values)
 
         self.get_session_details.emit(get_session_details)
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
 
 
 ##############################################
@@ -514,9 +476,42 @@ class PanSessionViewerMainWindow(QMainWindow):
         self.ui.button_clear_log.clicked.connect(lambda: self.ui.output_area.clear())
         self.ui.button_clear_session_wnd.clicked.connect(self._init_session_table)
         self.ui.tableSessions.cellDoubleClicked.connect(self._show_session_detail)
+        self.ui.chkbox_refresh_discovered.stateChanged.connect(self._set_refresh_timer)
 
         # Initialize session table widget
         self._init_session_table()
+
+        # Initialize scheduler for auto-refresh
+        self.s = sched.scheduler(time.time, time.sleep)
+
+    ####################################################
+    # AUTO REFRESH DISCOVERED SESSIONS TIMER
+    ####################################################
+    def _set_refresh_timer(self, chk_state):
+        if chk_state == 2:
+            # Perform actions
+            self.ui.output_area.append('> Discovered Session Auto-Refresh ENABLED')
+
+            # Schedule the next tick
+            self.s.enter(10, 1, self._refresh_timer_tick)
+
+            # Don't actually do this yet - it breaks things right now
+            #self.s.run()
+
+        else:
+            self.ui.output_area.append('> Discovered Session Auto-Refresh DISABLED')
+
+            # Disable any further timer ticks
+            list(map(self.s.cancel, self.s.queue))
+
+    #####################################################
+    # AUTO REFRESH TIMER TICK
+    #####################################################
+    def _refresh_timer_tick(self):
+        self.ui.output_area.append('> TICK - auto refresh timer')
+
+        # Schedule another tick
+        self.s.enter(10, 1, self._refresh_timer_tick)
 
     ####################################################
     # CLEAR AND INITIALIZE SESSION TABLE DB AND WIDGET
@@ -556,21 +551,6 @@ class PanSessionViewerMainWindow(QMainWindow):
     def _reset_flags_buttons(self):
         self._reset_flags()
         self._reset_button_color()
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def _api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self._url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self._ip), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self._ip), error_timeout
 
     ##############################################
     # CONNECT
@@ -634,7 +614,7 @@ class PanSessionViewerMainWindow(QMainWindow):
         """
 
         values = {'type': 'op', 'cmd': '<show><system><info></info></system></show>', 'key': self._api}
-        result, response, error = self._api_request(values)
+        result, response, error = api_request(self._url, values)
 
         # get device info
         if result:
@@ -715,6 +695,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             src_user=self.ui.src_user.text(),
             parent=None
         )
+
         self.connect_thread_get_sessions.start()
         self.connect_thread_get_sessions.get_session_values.connect(self._display_sessions)
         self.connect_thread_get_sessions.quit()
