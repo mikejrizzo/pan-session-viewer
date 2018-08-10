@@ -163,6 +163,9 @@ class Ui_MainWindow(object):
         self.label_11 = QtWidgets.QLabel(self.centralwidget)
         self.label_11.setGeometry(QtCore.QRect(10, 400, 241, 16))
         self.label_11.setObjectName("label_11")
+        self.chkbox_refresh_discovered = QtWidgets.QCheckBox(self.centralwidget)
+        self.chkbox_refresh_discovered.setGeometry(QtCore.QRect(900, 390, 191, 17))
+        self.chkbox_refresh_discovered.setObjectName("chkbox_refresh_discovered")
         MainWindow.setCentralWidget(self.centralwidget)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -214,6 +217,7 @@ class Ui_MainWindow(object):
         self.button_clear_log.setText(_translate("MainWindow", "Clear Log Window"))
         self.button_clear_session_wnd.setText(_translate("MainWindow", "Clear Session Window"))
         self.label_11.setText(_translate("MainWindow", "Double-Click Session to View Detailed Information"))
+        self.chkbox_refresh_discovered.setText(_translate("MainWindow", "Auto-Refresh Discovered Sessions"))
 
 
 if __name__ == "__main__":

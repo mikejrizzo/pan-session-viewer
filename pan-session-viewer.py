@@ -16,6 +16,26 @@ requests.packages.urllib3.disable_warnings()
 
 
 ##############################################
+# API REQUEST FUNCTION
+##############################################
+def api_request(url, values):
+    """
+    API request driver
+    values parameter must be a dictionary with the following format:
+    {'type': _api_operation_type_, 'cmd': _command_, 'key': _key_}
+
+    Returns contents of the server response, in unicode (direct output from requests.post().text)
+    """
+
+    try:
+        return True, requests.post(url, values, verify=False, timeout=10).text, None
+    except requests.exceptions.ConnectionError as error_api:
+        return False, 'Error connecting to {url} - Check IP Address'.format(url=url), error_api
+    except requests.exceptions.Timeout as error_timeout:
+        return None, 'Connection to {url} timed out, please try again'.format(url=url), error_timeout
+
+
+##############################################
 # GENERATE AND RETURN API KEY
 ##############################################
 class ConnectThread(QtCore.QThread):
@@ -104,7 +124,7 @@ class ConnectThread(QtCore.QThread):
         """
 
         values = {'type': 'keygen', 'user': self.user, 'password': self.password}
-        result, response, error = self.api_request(values)
+        result, response, error = api_request(self.url, values)
 
         try:
             # if API call was successful
@@ -130,21 +150,6 @@ class ConnectThread(QtCore.QThread):
         # if timeout
         except requests.Timeout as error_timeout:
             return False, 'Connection to {ip} timed out, please try again'.format(ip=self.ip), error_timeout
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.ip), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.ip), error_timeout
 
 
 ##############################################
@@ -174,24 +179,9 @@ class GetRunningConfig(QtCore.QThread):
             'cmd': '<show><config><saved>running-config.xml</saved></config></show>'
         }
 
-        combo_box_values['result'], combo_box_values['response'], combo_box_values['error'] = self.api_request(values)
+        combo_box_values['result'], combo_box_values['response'], combo_box_values['error'] = api_request(self.url, values)
 
         self.combo_box_values.emit(combo_box_values)
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
 
 
 ##############################################
@@ -276,24 +266,31 @@ class GetSessionData(QtCore.QThread):
             )
         }
 
-        get_session_values['result'], get_session_values['response'], get_session_values['error'] = self.api_request(values)
+        get_session_values['result'], get_session_values['response'], get_session_values['error'] = api_request(self.url, values)
 
         self.get_session_values.emit(get_session_values)
 
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
 
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
+##############################################
+# SESSION AUTO REFRESH TIMER THREAD
+##############################################
+class RefreshTimerThread(QtCore.QThread):
+    """
+    Simple timer thread that emits a tick signal every 10 seconds
+    """
+    timer_tick = QtCore.pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super(RefreshTimerThread, self).__init__(parent)
+        self.is_running = True
+
+    def run(self):
+        while self.is_running is True:
+            self.sleep(10)
+            self.timer_tick.emit(1)
+
+    def stop(self):
+        self.is_running = False
 
 
 ##############################################
@@ -317,31 +314,17 @@ class GetDetailedSession(QtCore.QThread):
             'response': None,
             'error': None
         }
-#
+
         values = {
             'type': 'op',
             'key': self.api,
             'cmd': '<show><session><id>{a}</id></session></show>'.format(a=self.session_id)
         }
 
-        get_session_details['result'], get_session_details['response'], get_session_details['error'] = self.api_request(values)
+        get_session_details['result'], get_session_details['response'], get_session_details['error'] = api_request(self.url, values)
+        get_session_details['session_id'] = self.session_id
 
         self.get_session_details.emit(get_session_details)
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self.url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self.url), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self.url), error_timeout
 
 
 ##############################################
@@ -482,6 +465,9 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Flag to skip quit dialog
         self.force_close = None
 
+        # Flag that an auto refresh is in progress
+        self.refresh_running = False
+
         # Initialize session table database
         db_con = sqlite3.connect(":memory:")
 
@@ -514,9 +500,28 @@ class PanSessionViewerMainWindow(QMainWindow):
         self.ui.button_clear_log.clicked.connect(lambda: self.ui.output_area.clear())
         self.ui.button_clear_session_wnd.clicked.connect(self._init_session_table)
         self.ui.tableSessions.cellDoubleClicked.connect(self._show_session_detail)
+        self.ui.chkbox_refresh_discovered.stateChanged.connect(self._set_refresh_timer)
 
         # Initialize session table widget
         self._init_session_table()
+
+    ####################################################
+    # AUTO REFRESH DISCOVERED SESSIONS TIMER
+    ####################################################
+    def _set_refresh_timer(self, chk_state):
+        if chk_state == 2:
+            # Perform actions
+            self.ui.output_area.append('> Discovered Session Auto-Refresh ENABLED')
+            # Initialize the refresh timer thread object
+            self.timer_thread = RefreshTimerThread()
+            self.timer_thread.start()
+            self.timer_thread.timer_tick.connect(self._refresh_timer_run)
+
+        else:
+            self.ui.output_area.append('> Discovered Session Auto-Refresh DISABLED')
+            self.timer_thread.stop()
+            self.timer_thread.quit()
+            self.timer_thread.wait()
 
     ####################################################
     # CLEAR AND INITIALIZE SESSION TABLE DB AND WIDGET
@@ -556,21 +561,6 @@ class PanSessionViewerMainWindow(QMainWindow):
     def _reset_flags_buttons(self):
         self._reset_flags()
         self._reset_button_color()
-
-    ##############################################
-    # API REQUEST
-    ##############################################
-    def _api_request(self, values):
-        """
-        API request driver
-        """
-
-        try:
-            return True, requests.post(self._url, values, verify=False, timeout=10).text, None
-        except requests.exceptions.ConnectionError as error_api:
-            return False, 'Error connecting to {ip} - Check IP Address'.format(ip=self._ip), error_api
-        except requests.exceptions.Timeout as error_timeout:
-            return None, 'Connection to {ip} timed out, please try again'.format(ip=self._ip), error_timeout
 
     ##############################################
     # CONNECT
@@ -634,7 +624,7 @@ class PanSessionViewerMainWindow(QMainWindow):
         """
 
         values = {'type': 'op', 'cmd': '<show><system><info></info></system></show>', 'key': self._api}
-        result, response, error = self._api_request(values)
+        result, response, error = api_request(self._url, values)
 
         # get device info
         if result:
@@ -715,6 +705,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             src_user=self.ui.src_user.text(),
             parent=None
         )
+
         self.connect_thread_get_sessions.start()
         self.connect_thread_get_sessions.get_session_values.connect(self._display_sessions)
         self.connect_thread_get_sessions.quit()
@@ -785,6 +776,80 @@ class PanSessionViewerMainWindow(QMainWindow):
         else:
             # If no sessions matched our query, log it
             self.ui.output_area.append('> No sessions matched query!')
+
+    ####################################################
+    # AUTO REFRESH DISCOVERED SESSIONS
+    ####################################################
+    def _refresh_timer_run(self, event):
+        self.ui.output_area.append('> Refresh Timer Tick')
+
+        if self.refresh_running is True:
+            # Don't run again if we haven't finished a previous refresh
+            self.ui.output_area.append('> Last refresh not done yet - skipping')
+
+        else:
+            # Get list of sessions to be refreshed
+            sql = '''SELECT id FROM SESSIONS;'''
+            try:
+                self.db_cur.execute(sql)
+
+            except sqlite3.Error as e:
+                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+            # Request current details of each session and save them into database
+            for row, form in enumerate(self.db_cur):
+                self.connect_thread_get_session = GetDetailedSession(self._api, self._url, self.db_cur.fetchone()[0], parent=None)
+                self.connect_thread_get_session.start()
+                self.connect_thread_get_session.get_session_details.connect(self._update_record)
+                self.connect_thread_get_session.quit()
+                self.connect_thread_get_session.wait()
+
+    def _update_record(self, session_details):
+        # Check if our search returned any results
+        if session_details['result'] is True and lxml.fromstring(session_details['response']).get('status') == 'success':
+            session_xml = lxml.fromstring(session_details['response'])
+
+        else:
+            # Should do something useful here, but just close the window for now
+            self.close()
+
+        # Update database record
+        # NOTE: There are no XML 'attributes' present in the session entries, so we must look for the Element instead
+        session = session_xml.find('.//result')
+
+        try:
+            self.db_cur.execute('''UPDATE SESSIONS SET application=?, state=? WHERE id=?;''',
+                                (session.find('application').text, session.find('./s2c/state').text,
+                                 session_details['session_id']))
+
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+        # Erase session output table to prepare for update
+        self.ui.tableSessions.clear()
+        self.ui.tableSessions.setColumnCount(11)
+        self.ui.tableSessions.setHorizontalHeaderLabels(
+            "Session ID;VSYS;Application;State;Type;Src Zone;Src Address;Src Port;Dst Zone;Dst Address;Dst Port".split(
+                ";"))
+
+        # Re-populate table widget with updated details
+        # Get all sessions from database and add them to the table widget
+        sql = '''SELECT * FROM SESSIONS;'''
+
+        self.ui.tableSessions.setRowCount(0)
+
+        try:
+            self.db_cur.execute(sql)
+
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+        for row, form in enumerate(self.db_cur):
+            self.ui.tableSessions.insertRow(row)
+            for column, item in enumerate(form):
+                self.ui.tableSessions.setItem(row, column, QTableWidgetItem(str(item)))
+
+        self.refresh_running = False
 
     ##############################################
     # SHOW CRITICAL ERROR
