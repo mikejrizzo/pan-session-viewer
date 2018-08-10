@@ -6,9 +6,7 @@ import requests
 import sys
 import socket
 import sqlite3
-import time
 import datetime
-import sched
 from qt_pan_session_viewer_ui import Ui_MainWindow
 from qt_session_detail_ui import Ui_SessionDetail
 
@@ -274,6 +272,28 @@ class GetSessionData(QtCore.QThread):
 
 
 ##############################################
+# SESSION AUTO REFRESH TIMER THREAD
+##############################################
+class RefreshTimerThread(QtCore.QThread):
+    """
+    Simple timer thread that emits a tick signal every 10 seconds
+    """
+    timer_tick = QtCore.pyqtSignal(int)
+
+    def __init__(self, parent=None):
+        super(RefreshTimerThread, self).__init__(parent)
+        self.is_running = True
+
+    def run(self):
+        while self.is_running is True:
+            self.sleep(10)
+            self.timer_tick.emit(1)
+
+    def stop(self):
+        self.is_running = False
+
+
+##############################################
 # GET DETAIL FOR SPECIFIC SESSION
 ##############################################
 class GetDetailedSession(QtCore.QThread):
@@ -294,7 +314,7 @@ class GetDetailedSession(QtCore.QThread):
             'response': None,
             'error': None
         }
-#
+
         values = {
             'type': 'op',
             'key': self.api,
@@ -302,6 +322,7 @@ class GetDetailedSession(QtCore.QThread):
         }
 
         get_session_details['result'], get_session_details['response'], get_session_details['error'] = api_request(self.url, values)
+        get_session_details['session_id'] = self.session_id
 
         self.get_session_details.emit(get_session_details)
 
@@ -444,6 +465,9 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Flag to skip quit dialog
         self.force_close = None
 
+        # Flag that an auto refresh is in progress
+        self.refresh_running = False
+
         # Initialize session table database
         db_con = sqlite3.connect(":memory:")
 
@@ -481,9 +505,6 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Initialize session table widget
         self._init_session_table()
 
-        # Initialize scheduler for auto-refresh
-        self.s = sched.scheduler(time.time, time.sleep)
-
     ####################################################
     # AUTO REFRESH DISCOVERED SESSIONS TIMER
     ####################################################
@@ -491,27 +512,16 @@ class PanSessionViewerMainWindow(QMainWindow):
         if chk_state == 2:
             # Perform actions
             self.ui.output_area.append('> Discovered Session Auto-Refresh ENABLED')
-
-            # Schedule the next tick
-            self.s.enter(10, 1, self._refresh_timer_tick)
-
-            # Don't actually do this yet - it breaks things right now
-            #self.s.run()
+            # Initialize the refresh timer thread object
+            self.timer_thread = RefreshTimerThread()
+            self.timer_thread.start()
+            self.timer_thread.timer_tick.connect(self._refresh_timer_run)
 
         else:
             self.ui.output_area.append('> Discovered Session Auto-Refresh DISABLED')
-
-            # Disable any further timer ticks
-            list(map(self.s.cancel, self.s.queue))
-
-    #####################################################
-    # AUTO REFRESH TIMER TICK
-    #####################################################
-    def _refresh_timer_tick(self):
-        self.ui.output_area.append('> TICK - auto refresh timer')
-
-        # Schedule another tick
-        self.s.enter(10, 1, self._refresh_timer_tick)
+            self.timer_thread.stop()
+            self.timer_thread.quit()
+            self.timer_thread.wait()
 
     ####################################################
     # CLEAR AND INITIALIZE SESSION TABLE DB AND WIDGET
@@ -766,6 +776,80 @@ class PanSessionViewerMainWindow(QMainWindow):
         else:
             # If no sessions matched our query, log it
             self.ui.output_area.append('> No sessions matched query!')
+
+    ####################################################
+    # AUTO REFRESH DISCOVERED SESSIONS
+    ####################################################
+    def _refresh_timer_run(self, event):
+        self.ui.output_area.append('> Refresh Timer Tick')
+
+        if self.refresh_running is True:
+            # Don't run again if we haven't finished a previous refresh
+            self.ui.output_area.append('> Last refresh not done yet - skipping')
+
+        else:
+            # Get list of sessions to be refreshed
+            sql = '''SELECT id FROM SESSIONS;'''
+            try:
+                self.db_cur.execute(sql)
+
+            except sqlite3.Error as e:
+                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+            # Request current details of each session and save them into database
+            for row, form in enumerate(self.db_cur):
+                self.connect_thread_get_session = GetDetailedSession(self._api, self._url, self.db_cur.fetchone()[0], parent=None)
+                self.connect_thread_get_session.start()
+                self.connect_thread_get_session.get_session_details.connect(self._update_record)
+                self.connect_thread_get_session.quit()
+                self.connect_thread_get_session.wait()
+
+    def _update_record(self, session_details):
+        # Check if our search returned any results
+        if session_details['result'] is True and lxml.fromstring(session_details['response']).get('status') == 'success':
+            session_xml = lxml.fromstring(session_details['response'])
+
+        else:
+            # Should do something useful here, but just close the window for now
+            self.close()
+
+        # Update database record
+        # NOTE: There are no XML 'attributes' present in the session entries, so we must look for the Element instead
+        session = session_xml.find('.//result')
+
+        try:
+            self.db_cur.execute('''UPDATE SESSIONS SET application=?, state=? WHERE id=?;''',
+                                (session.find('application').text, session.find('./s2c/state').text,
+                                 session_details['session_id']))
+
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+        # Erase session output table to prepare for update
+        self.ui.tableSessions.clear()
+        self.ui.tableSessions.setColumnCount(11)
+        self.ui.tableSessions.setHorizontalHeaderLabels(
+            "Session ID;VSYS;Application;State;Type;Src Zone;Src Address;Src Port;Dst Zone;Dst Address;Dst Port".split(
+                ";"))
+
+        # Re-populate table widget with updated details
+        # Get all sessions from database and add them to the table widget
+        sql = '''SELECT * FROM SESSIONS;'''
+
+        self.ui.tableSessions.setRowCount(0)
+
+        try:
+            self.db_cur.execute(sql)
+
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+        for row, form in enumerate(self.db_cur):
+            self.ui.tableSessions.insertRow(row)
+            for column, item in enumerate(form):
+                self.ui.tableSessions.setItem(row, column, QTableWidgetItem(str(item)))
+
+        self.refresh_running = False
 
     ##############################################
     # SHOW CRITICAL ERROR
