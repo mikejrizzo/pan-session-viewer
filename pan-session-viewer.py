@@ -65,35 +65,40 @@ class ConnectThread(QtCore.QThread):
             'url': None
         }
 
-        # IP
+        # Make sure we received either an IP address or a DNS hostname that we can resolve to an IP
         try:
             socket.gethostbyname(self.ip)
+
         except socket.gaierror as os_error_ip:
             print(os_error_ip)
             connect_values['response'] = "Unable to Connect or Invalid IP address given"
             connect_values['error'] = os_error_ip
-        else:
 
+        else:
             connect_values['url'] = self.url = 'https://{ip}/api'.format(ip=self.ip)
             connect_values['ip'] = self.ip
 
-            # Username
+            # Make sure a username has been entered, and that it doesn't contain spaces
             try:
                 if self.user.isspace() or len(self.user) is 0:
                     raise AttributeError('invalid username')
+
             except AttributeError as error_user:
                 connect_values['response'] = 'The Username field is blank'
                 connect_values['error'] = error_user
+
             else:
                 connect_values['user'] = self.user
 
-                # Password
+                # Make sure a password has been entered, and that it doesn't contain spaces
                 try:
                     if self.password.isspace() or len(self.password) is 0:
                         raise AttributeError('invalid password')
+
                 except AttributeError as error_password:
                     connect_values['response'] = 'The Password field is blank'
                     connect_values['error'] = error_password
+
                 else:
                     connect_values['password'] = self.password
 
@@ -101,7 +106,7 @@ class ConnectThread(QtCore.QThread):
                     self.valid = True
 
             if self.valid:
-
+                # If all inputs are good, generate the API key for subsequent API calls
                 try:
                     # get API key
                     connect_values['result'], connect_values['response'], connect_values['error'] = self.keygen()
@@ -196,7 +201,8 @@ class GetSessionData(QtCore.QThread):
         self.is_running = True
         self.api = api
         self.url = url
-        # Construct filter parameters for API query
+
+        # Construct filter parameters for API query based on user-supplied search terms
         self.filters = dict()
         if len(src_ip) > 0:
             self.filters['source'] = '<source>{srcip}</source>'.format(srcip=src_ip)
@@ -277,6 +283,7 @@ class GetSessionData(QtCore.QThread):
 class RefreshTimerThread(QtCore.QThread):
     """
     Simple timer thread that emits a tick signal every 10 seconds
+    Can be safely terminated at any time with no data loss
     """
     timer_tick = QtCore.pyqtSignal(int)
 
@@ -289,42 +296,47 @@ class RefreshTimerThread(QtCore.QThread):
             self.sleep(10)
             self.timer_tick.emit(1)
 
-    def stop(self):
-        self.is_running = False
-
 
 ##############################################
 # GET DETAIL FOR SPECIFIC SESSION
 ##############################################
-class GetDetailedSession(QtCore.QThread):
+class GetDetailedSessions(QtCore.QThread):
 
     get_session_details = QtCore.pyqtSignal(dict)
 
-    def __init__(self, api, url, session_id, parent=None):
-        super(GetDetailedSession, self).__init__(parent)
+    def __init__(self, api, url, session_ids, parent=None):
+        super(GetDetailedSessions, self).__init__(parent)
         self.is_running = True
         self.api = api
         self.url = url
-        self.session_id = session_id
+        # session_ids must be a list of Session ID numbers
+        self.session_ids = session_ids
+        self.session_results = {}
 
     def run(self):
-
         get_session_details = {
             'result': None,
             'response': None,
             'error': None
         }
+        # Loop through all Session IDs to be retrieved
+        for session_id in self.session_ids:
+            values = {
+                'type': 'op',
+                'key': self.api,
+                'cmd': '<show><session><id>{a}</id></session></show>'.format(a=session_id)
+            }
 
-        values = {
-            'type': 'op',
-            'key': self.api,
-            'cmd': '<show><session><id>{a}</id></session></show>'.format(a=self.session_id)
-        }
+            get_session_details['result'], get_session_details['response'], get_session_details['error'] = api_request(self.url, values)
 
-        get_session_details['result'], get_session_details['response'], get_session_details['error'] = api_request(self.url, values)
-        get_session_details['session_id'] = self.session_id
+            # Check if our query returned any results
+            if get_session_details['result'] is True and lxml.fromstring(get_session_details['response']).get('status') == 'success':
+                session_xml = lxml.fromstring(get_session_details['response'])
+                self.session_results[session_id] = session_xml
+            else:
+                self.session_results[session_id] = 'Error getting session details'
 
-        self.get_session_details.emit(get_session_details)
+        self.get_session_details.emit(self.session_results)
 
 
 ##############################################
@@ -358,19 +370,13 @@ class SessionDetailWindow(QMainWindow):
         self._get_session()
 
     def _get_session(self):
-        self.connect_thread_get_session = GetDetailedSession(self.api, self.url, self.session_id, parent=None)
+        self.connect_thread_get_session = GetDetailedSessions(self.api, self.url, [self.session_id], parent=None)
         self.connect_thread_get_session.start()
         self.connect_thread_get_session.get_session_details.connect(self._populate_form)
         self.connect_thread_get_session.quit()
 
     def _populate_form(self, session_details):
-        # Check if our search returned any results
-        if session_details['result'] is True and lxml.fromstring(session_details['response']).get('status') == 'success':
-            self._session = lxml.fromstring(session_details['response'])
-
-        else:
-            # Should do something useful here, but just close the window for now
-            self.close()
+        self._session = session_details[self.session_id]
 
         # Populate session detail form with data returned from firewall
         # NOTE: There are no XML 'attributes' present in the session entries, so we must look for the Element instead
@@ -519,9 +525,7 @@ class PanSessionViewerMainWindow(QMainWindow):
 
         else:
             self.ui.output_area.append('> Discovered Session Auto-Refresh DISABLED')
-            self.timer_thread.stop()
-            self.timer_thread.quit()
-            self.timer_thread.wait()
+            self.timer_thread.terminate()
 
     ####################################################
     # CLEAR AND INITIALIZE SESSION TABLE DB AND WIDGET
@@ -700,7 +704,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             src_zone=self.ui.cbo_src_zone.currentText(),
             dst_zone=self.ui.cbo_dst_zone.currentText(),
             src_intf=self.ui.cbo_src_intf.currentText(),
-            dst_intf=self.ui.cbo_dst_zone.currentText(),
+            dst_intf=self.ui.cbo_dst_intf.currentText(),
             app_id=self.ui.appid.text(),
             src_user=self.ui.src_user.text(),
             parent=None
@@ -788,6 +792,22 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.ui.output_area.append('> Last refresh not done yet - skipping')
 
         else:
+            # Check if there are any sessions to refresh, otherwise show an error and cancel further refreshes
+            sql = '''SELECT count(*) FROM SESSIONS;'''
+            try:
+                self.db_cur.execute(sql)
+
+            except sqlite3.Error as e:
+                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+
+            if self.db_cur.fetchone()[0] < 1:
+                self.ui.output_area.append('> No discovered sessions to refresh.  Please run a search with results before enabling auto-refresh.')
+                self.ui.chkbox_refresh_discovered.setChecked(False)
+                return
+
+            # Initialize empty list for session IDs to refresh
+            session_ids = list()
+
             # Get list of sessions to be refreshed
             sql = '''SELECT id FROM SESSIONS;'''
             try:
@@ -797,33 +817,28 @@ class PanSessionViewerMainWindow(QMainWindow):
                 self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
 
             # Request current details of each session and save them into database
-            for row, form in enumerate(self.db_cur):
-                self.connect_thread_get_session = GetDetailedSession(self._api, self._url, self.db_cur.fetchone()[0], parent=None)
-                self.connect_thread_get_session.start()
-                self.connect_thread_get_session.get_session_details.connect(self._update_record)
-                self.connect_thread_get_session.quit()
-                self.connect_thread_get_session.wait()
+            for row in self.db_cur:
+                session_ids.append(row[0])
 
-    def _update_record(self, session_details):
-        # Check if our search returned any results
-        if session_details['result'] is True and lxml.fromstring(session_details['response']).get('status') == 'success':
-            session_xml = lxml.fromstring(session_details['response'])
+            self.connect_thread_get_session = GetDetailedSessions(self._api, self._url, session_ids, parent=None)
+            self.connect_thread_get_session.start()
+            self.connect_thread_get_session.get_session_details.connect(self._update_records)
+            self.connect_thread_get_session.quit()
+            self.connect_thread_get_session.wait()
 
-        else:
-            # Should do something useful here, but just close the window for now
-            self.close()
-
-        # Update database record
+    def _update_records(self, session_details):
+        # Update database records
         # NOTE: There are no XML 'attributes' present in the session entries, so we must look for the Element instead
-        session = session_xml.find('.//result')
+        for session_id, session_xml in session_details.items():
+            current_session = session_xml.find('.//result')
 
-        try:
-            self.db_cur.execute('''UPDATE SESSIONS SET application=?, state=? WHERE id=?;''',
-                                (session.find('application').text, session.find('./s2c/state').text,
-                                 session_details['session_id']))
+            try:
+                self.db_cur.execute('''UPDATE SESSIONS SET application=?, state=? WHERE id=?;''',
+                                    (current_session.find('application').text, current_session.find('./s2c/state').text,
+                                     session_id))
 
-        except sqlite3.Error as e:
-            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+            except sqlite3.Error as e:
+                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
 
         # Erase session output table to prepare for update
         self.ui.tableSessions.clear()
