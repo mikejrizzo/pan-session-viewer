@@ -7,6 +7,10 @@ The tool provides several useful functions:
 * Keeps a running list of sessions in the display, even ones that have been closed
 * Double click a session in the display to open a new window showing additional detail
 
+To run the program, just type:
+
+`> python pan-session-viewer.py`
+
 This project is EXPERIMENTAL, created as a side project.  Anybody is free to download and use it, though you'd have to be mad to rely on it for anything critical.
 
 This project is COMPLETELY UNSUPPORTED.
