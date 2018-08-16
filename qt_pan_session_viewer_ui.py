@@ -157,6 +157,8 @@ class Ui_MainWindow(object):
         self.button_clear_session_wnd.setObjectName("button_clear_session_wnd")
         self.tableSessions = QtWidgets.QTableWidget(self.centralwidget)
         self.tableSessions.setGeometry(QtCore.QRect(10, 420, 1081, 241))
+        self.tableSessions.setVerticalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
+        self.tableSessions.setHorizontalScrollMode(QtWidgets.QAbstractItemView.ScrollPerPixel)
         self.tableSessions.setObjectName("tableSessions")
         self.tableSessions.setColumnCount(0)
         self.tableSessions.setRowCount(0)
