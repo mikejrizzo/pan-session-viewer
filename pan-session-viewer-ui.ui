@@ -356,17 +356,46 @@
      <string>Double-Click Session to View Detailed Information</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="chkbox_refresh_discovered">
+   <widget class="QCheckBox" name="chkbox_refresh_search">
     <property name="geometry">
      <rect>
-      <x>900</x>
+      <x>930</x>
       <y>390</y>
-      <width>191</width>
-      <height>17</height>
+      <width>161</width>
+      <height>20</height>
      </rect>
     </property>
     <property name="text">
-     <string>Auto-Refresh Discovered Sessions</string>
+     <string>Auto-Refresh Session Search</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_refresh_existing">
+    <property name="geometry">
+     <rect>
+      <x>710</x>
+      <y>670</y>
+      <width>141</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Refresh Existing Sessions</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_sessions_tracked">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>660</y>
+      <width>131</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Number of sessions tracked.  Includes expired sessions and sessions from previous searches.&lt;/p&gt;&lt;p&gt;Click 'Clear Session Window' to start over&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
+    <property name="text">
+     <string>Sessions Tracked: 0</string>
     </property>
    </widget>
   </widget>

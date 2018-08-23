@@ -495,7 +495,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.db_cur = db_con.cursor()
 
         except sqlite3.Error as e:
-            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
         ##############################################
         # BUTTON EVENTS/TRIGGERS
@@ -506,7 +506,8 @@ class PanSessionViewerMainWindow(QMainWindow):
         self.ui.button_clear_log.clicked.connect(lambda: self.ui.output_area.clear())
         self.ui.button_clear_session_wnd.clicked.connect(self._init_session_table)
         self.ui.tableSessions.cellDoubleClicked.connect(self._show_session_detail)
-        self.ui.chkbox_refresh_discovered.stateChanged.connect(self._set_refresh_timer)
+        self.ui.chkbox_refresh_search.stateChanged.connect(self._set_refresh_timer)
+        self.ui.btn_refresh_existing.clicked.connect(self._update_existing)
 
         # Initialize session table widget
         self._init_session_table()
@@ -517,14 +518,14 @@ class PanSessionViewerMainWindow(QMainWindow):
     def _set_refresh_timer(self, chk_state):
         if chk_state == 2:
             # Perform actions
-            self.ui.output_area.append('> Discovered Session Auto-Refresh ENABLED')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Session Search Auto-Refresh ENABLED')
             # Initialize the refresh timer thread object
             self.timer_thread = RefreshTimerThread()
             self.timer_thread.start()
             self.timer_thread.timer_tick.connect(self._refresh_timer_run)
 
         else:
-            self.ui.output_area.append('> Discovered Session Auto-Refresh DISABLED')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Session Search Auto-Refresh DISABLED')
             self.timer_thread.terminate()
 
     ####################################################
@@ -537,13 +538,16 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.db_cur.execute(sql)
 
         except sqlite3.Error as e:
-            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
         # Make sure output table is clear, and set headers
         self.ui.tableSessions.clear()
         self.ui.tableSessions.setColumnCount(11)
         self.ui.tableSessions.setRowCount(0)
         self.ui.tableSessions.setHorizontalHeaderLabels("Session ID;VSYS;Application;State;Type;Src Zone;Src Address;Src Port;Dst Zone;Dst Address;Dst Port".split(";"))
+
+        # Update label showing current count
+        self.ui.lbl_sessions_tracked.setText('Sessions Tracked: 0')
 
     ##############################################
     # RESET FLAGS
@@ -651,12 +655,12 @@ class PanSessionViewerMainWindow(QMainWindow):
         # if we successfully loaded the running config...
         if values['result'] is True and lxml.fromstring(values['response']).get('status') == 'success':
             self._running_config = lxml.fromstring(values['response'])
-            self.ui.output_area.append('> "{name}" has been loaded!'.format(name='running-config.xml'))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' "{name}" has been loaded!'.format(name='running-config.xml'))
 
         else:
             self.ui.output_area.clear()
-            self.ui.output_area.append('> Error loading "{name}". Please try again.'.format(name='running-config.xml'))
-            self.ui.output_area.append('> {error}'.format(error=values['error']))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Error loading "{name}". Please try again.'.format(name='running-config.xml'))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' {error}'.format(error=values['error']))
             return None
 
         # check if Panorama - if so, error out; we can only run against firewalls...
@@ -721,12 +725,12 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Check if our search returned any results
         if session_values['result'] is True and lxml.fromstring(session_values['response']).get('status') == 'success':
             self._session_table = lxml.fromstring(session_values['response'])
-            self.ui.output_area.append('> Session Table query has been completed!')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Session Table query has been completed!')
 
         else:
             self.ui.output_area.clear()
-            self.ui.output_area.append('> Error retrieving session table. Please try again.')
-            self.ui.output_area.append('> {error}'.format(error=session_values['error']))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Error retrieving session table. Please try again.')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' {error}'.format(error=session_values['error']))
             return None
 
         # Populate table widget with sessions
@@ -747,16 +751,18 @@ class PanSessionViewerMainWindow(QMainWindow):
                                               session.find('dport').text])
 
                 except sqlite3.Error as e:
-                    self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+                    self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
             # Log how many entries we have in the database now
             sql = '''SELECT count(*) FROM SESSIONS;'''
             try:
                 self.db_cur.execute(sql)
-                self.ui.output_area.append('> sqlite database now contains {a} entries'.format(a=self.db_cur.fetchone()[0]))
+                count = self.db_cur.fetchone()[0]
+                self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' sqlite database now contains {a} entries'.format(a=count))
+                self.ui.lbl_sessions_tracked.setText('Sessions Tracked {a}'.format(a=count))
 
             except sqlite3.Error as e:
-                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+                self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
             # Erase session output table to prepare for update
             self.ui.tableSessions.clear()
@@ -770,7 +776,7 @@ class PanSessionViewerMainWindow(QMainWindow):
                 self.db_cur.execute(sql)
 
             except sqlite3.Error as e:
-                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+                self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
             for row, form in enumerate(self.db_cur):
                 self.ui.tableSessions.insertRow(row)
@@ -779,52 +785,61 @@ class PanSessionViewerMainWindow(QMainWindow):
 
         else:
             # If no sessions matched our query, log it
-            self.ui.output_area.append('> No sessions matched query!')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' No sessions matched query!')
 
     ####################################################
-    # AUTO REFRESH DISCOVERED SESSIONS
+    # AUTO REFRESH SESSION SEARCH
     ####################################################
     def _refresh_timer_run(self, event):
-        self.ui.output_area.append('> Refresh Timer Tick')
+        self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Refresh Timer Tick')
 
         if self.refresh_running is True:
             # Don't run again if we haven't finished a previous refresh
-            self.ui.output_area.append('> Last refresh not done yet - skipping')
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' Last refresh not done yet - skipping')
+            return None
 
         else:
-            # Check if there are any sessions to refresh, otherwise show an error and cancel further refreshes
-            sql = '''SELECT count(*) FROM SESSIONS;'''
-            try:
-                self.db_cur.execute(sql)
+            # Signal that a refresh operation is in progress
+            self.refresh_running = True
 
-            except sqlite3.Error as e:
-                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+            # Run function to refresh state of existing sessions
+            self._update_existing()
 
-            if self.db_cur.fetchone()[0] < 1:
-                self.ui.output_area.append('> No discovered sessions to refresh.  Please run a search with results before enabling auto-refresh.')
-                self.ui.chkbox_refresh_discovered.setChecked(False)
-                return
+            # Run function to perform search using current filter selections
+            self._search_sessions()
 
-            # Initialize empty list for session IDs to refresh
-            session_ids = list()
+            # Signal that we're done
+            self.refresh_running = False
 
-            # Get list of sessions to be refreshed
-            sql = '''SELECT id FROM SESSIONS;'''
-            try:
-                self.db_cur.execute(sql)
+    def _update_existing(self):
+        # Check if there are any sessions to refresh, otherwise show an error and cancel further refreshes
+        sql = '''SELECT count(*) FROM SESSIONS;'''
+        try:
+            self.db_cur.execute(sql)
 
-            except sqlite3.Error as e:
-                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
-            # Request current details of each session and save them into database
-            for row in self.db_cur:
-                session_ids.append(row[0])
+        # Initialize empty list for session IDs to refresh
+        session_ids = list()
 
-            self.connect_thread_get_session = GetDetailedSessions(self._api, self._url, session_ids, parent=None)
-            self.connect_thread_get_session.start()
-            self.connect_thread_get_session.get_session_details.connect(self._update_records)
-            self.connect_thread_get_session.quit()
-            self.connect_thread_get_session.wait()
+        # Get list of sessions to be refreshed
+        sql = '''SELECT id FROM SESSIONS;'''
+        try:
+            self.db_cur.execute(sql)
+
+        except sqlite3.Error as e:
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
+
+        # Request current details of each session and save them into database
+        for row in self.db_cur:
+            session_ids.append(row[0])
+
+        self.connect_thread_get_session = GetDetailedSessions(self._api, self._url, session_ids, parent=None)
+        self.connect_thread_get_session.start()
+        self.connect_thread_get_session.get_session_details.connect(self._update_records)
+        self.connect_thread_get_session.quit()
+        self.connect_thread_get_session.wait()
 
     def _update_records(self, session_details):
         # Update database records
@@ -838,7 +853,7 @@ class PanSessionViewerMainWindow(QMainWindow):
                                      session_id))
 
             except sqlite3.Error as e:
-                self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+                self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
         # Erase session output table to prepare for update
         self.ui.tableSessions.clear()
@@ -857,14 +872,12 @@ class PanSessionViewerMainWindow(QMainWindow):
             self.db_cur.execute(sql)
 
         except sqlite3.Error as e:
-            self.ui.output_area.append('> An Error Occurred: {}'.format(e.args[0]))
+            self.ui.output_area.append('> ' + str(datetime.datetime.now().time().strftime('%H:%M:%S')) + ' An Error Occurred: {}'.format(e.args[0]))
 
         for row, form in enumerate(self.db_cur):
             self.ui.tableSessions.insertRow(row)
             for column, item in enumerate(form):
                 self.ui.tableSessions.setItem(row, column, QTableWidgetItem(str(item)))
-
-        self.refresh_running = False
 
     ##############################################
     # SHOW CRITICAL ERROR
