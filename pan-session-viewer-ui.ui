@@ -98,6 +98,9 @@
         <property name="text">
          <string>Connect</string>
         </property>
+        <property name="autoDefault">
+         <bool>true</bool>
+        </property>
        </widget>
       </item>
       <item row="1" column="1">
@@ -138,6 +141,9 @@
      </property>
      <property name="text">
       <string>Search Sessions</string>
+     </property>
+     <property name="autoDefault">
+      <bool>true</bool>
      </property>
     </widget>
     <widget class="QWidget" name="layoutWidget">
@@ -287,6 +293,9 @@
     <property name="text">
      <string>Quit</string>
     </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QLabel" name="label_status">
     <property name="geometry">
@@ -313,6 +322,9 @@
     <property name="text">
      <string>Clear Log Window</string>
     </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QPushButton" name="button_clear_session_wnd">
     <property name="geometry">
@@ -325,6 +337,9 @@
     </property>
     <property name="text">
      <string>Clear Session Window</string>
+    </property>
+    <property name="autoDefault">
+     <bool>true</bool>
     </property>
    </widget>
    <widget class="QTableWidget" name="tableSessions">
@@ -381,6 +396,9 @@
     <property name="text">
      <string>Refresh Existing Sessions</string>
     </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QLabel" name="lbl_sessions_tracked">
     <property name="geometry">
@@ -420,6 +438,8 @@
   <tabstop>output_area</tabstop>
   <tabstop>button_clear_log</tabstop>
   <tabstop>tableSessions</tabstop>
+  <tabstop>chkbox_refresh_search</tabstop>
+  <tabstop>btn_refresh_existing</tabstop>
   <tabstop>button_clear_session_wnd</tabstop>
   <tabstop>button_quit</tabstop>
  </tabstops>
