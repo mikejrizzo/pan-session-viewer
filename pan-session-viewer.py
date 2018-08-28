@@ -659,21 +659,30 @@ class PanSessionViewerMainWindow(QMainWindow):
     ##############################################
     def _system_info(self):
         """
-        Show System Info: set status bar and get device info
+        Show System Info and HA State: update status bar with system details
         """
 
-        values = {'type': 'op', 'cmd': '<show><system><info></info></system></show>', 'key': self._api}
-        result, response, error = api_request(self._url, self.api_session, values)
+        values1 = {'type': 'op', 'cmd': '<show><system><info></info></system></show>', 'key': self._api}
+        result1, response1, error1 = api_request(self._url, self.api_session, values1)
+
+        values2 = {'type': 'op', 'cmd': '<show><high-availability><state></state></high-availability></show>', 'key': self._api}
+        result2, response2, error2 = api_request(self._url, self.api_session, values2)
 
         # get device info
-        if result:
-            root = lxml.fromstring(response)
+        if result1:
+            root = lxml.fromstring(response1)
             model = root.findtext('.//model')
             self._device = root.findtext('.//devicename')
             self._sw = root.findtext('.//sw-version')
 
+        # get HA info
+        if result2:
+            root2 = lxml.fromstring(response2)
+            ha_mode = root2.findtext('.//group/mode')
+            ha_state = root2.findtext('.//group/local-info/state')
+
             # set status bar
-            self.ui.statusbar.showMessage('Model: {m} {x:5}|{x:5}Device Name: {d} {x:5}|{x:5}SW Version: {s}'.format(m=model, d=self._device, s=self._sw, x=''))
+            self.ui.statusbar.showMessage('Model: {m} {x:5}|{x:5}Device Name: {d} {x:5}|{x:5}SW Version: {s} {x:5}|{x:5}HA Mode: {mode} {x:5}|{x:5}HA State: {state}'.format(m=model, d=self._device, s=self._sw, x='', mode=ha_mode, state=str(ha_state).upper()))
 
     ##############################################
     # POPULATE COMBO BOXES
