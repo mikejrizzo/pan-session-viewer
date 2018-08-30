@@ -1,0 +1,6 @@
+DateTime>=4.2
+lxml>=4.2.3
+PyQT5>=5.11.2
+PyQT5-sip>=4.19.12
+requests>=2.19.1
+urllib3>=1.23
