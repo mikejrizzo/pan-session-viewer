@@ -198,7 +198,7 @@ class GetSessionData(QtCore.QThread):
 
     get_session_values = QtCore.pyqtSignal(dict)
 
-    def __init__(self, api, url, src_ip, src_port, dst_ip, dst_port, src_zone, dst_zone, src_intf, dst_intf, app_id, src_user, parent=None):
+    def __init__(self, api, url, src_ip, src_port, dst_ip, dst_port, src_zone, dst_zone, src_intf, dst_intf, app_id, src_user, target_vsys, parent=None):
         super(GetSessionData, self).__init__(parent)
         self.is_running = True
         self.api = api
@@ -256,6 +256,22 @@ class GetSessionData(QtCore.QThread):
             self.filters['source-user'] = '<source-user>{srcuser}</source-user>'.format(srcuser=src_user)
         else:
             self.filters['source-user'] = ''
+
+        if len(target_vsys) > 0:
+            # If a target vsys is specified, send API command to set it for subsequent queries
+            set_target_vsys = {
+                'result': None,
+                'response': None,
+                'error': None
+            }
+
+            values = {
+                'type': 'op',
+                'key': self.api,
+                'cmd': '<set><system><setting><target-vsys>{a}</target-vsys></setting></system></set>'.format(a=target_vsys)
+            }
+
+            set_target_vsys['result'], set_target_vsys['response'], set_target_vsys['error'] = api_request(self.url, self.api_session, values)
 
     def run(self):
 
@@ -502,6 +518,10 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Initialize requests session for this window
         self.api_session = requests.Session()
 
+        # Hide VSYS label and combo box until we need them
+        self.ui.lbl_vsys.hide()
+        self.ui.cbo_vsys.hide()
+
         try:
             db_con.execute("create table SESSIONS ("
                            "id integer primary key, "
@@ -533,6 +553,7 @@ class PanSessionViewerMainWindow(QMainWindow):
         self.ui.tableSessions.cellDoubleClicked.connect(self._show_session_detail)
         self.ui.chkbox_refresh_search.stateChanged.connect(self._set_refresh_timer)
         self.ui.btn_refresh_existing.clicked.connect(self._update_existing)
+        self.ui.cbo_vsys.currentIndexChanged.connect(self._populate_vsys_zone)
 
         # Initialize session table widget
         self._init_session_table()
@@ -729,11 +750,50 @@ class PanSessionViewerMainWindow(QMainWindow):
         # Populate Zone combo boxes
         # NOTE: the names of zones exist as XML 'attributes' within each entry
         self.zones = ['Any']
-        for zones in self._running_config.xpath('//config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/zone/entry'):
-            self.zones.append(zones.get('name'))
+        self.vsys_list = []
 
-        self.ui.cbo_src_zone.addItems(self.zones)
-        self.ui.cbo_dst_zone.addItems(self.zones)
+        for vsys in self._running_config.xpath('//config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry'):
+            self.vsys_list.append(vsys.get('name'))
+
+        if len(self.vsys_list) > 1:
+            # We have more than one vsys - don't populate zone combo boxes until a selection is made
+            self.vsys_list.insert(0, '--Please Choose--')
+            self.ui.cbo_vsys.addItems(self.vsys_list)
+
+            # Un-hide label and combo box to select vsys
+            self.ui.lbl_vsys.show()
+            self.ui.cbo_vsys.show()
+            return
+
+        else:
+            # Otherwise proceed with what we have
+            for zones in self._running_config.xpath('//config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'vsys1\']/zone/entry'):
+                self.zones.append(zones.get('name'))
+
+            self.ui.cbo_src_zone.addItems(self.zones)
+            self.ui.cbo_dst_zone.addItems(self.zones)
+
+    ##############################################################
+    # POPULATE VSYS SPECIFIC ZONES
+    ##############################################################
+    def _populate_vsys_zone(self, vsysbox_index):
+        # Reset zone list and combo boxes
+        self.zones.clear()
+        self.zones = ['Any']
+        self.ui.cbo_src_zone.clear()
+        self.ui.cbo_dst_zone.clear()
+
+        if vsysbox_index == 0:
+            # 0 is the instructions - don't do anything
+            return
+        else:
+            for zones in self._running_config.xpath('//config/devices/entry[@name=\'localhost.localdomain\']/vsys/entry[@name=\'{vsysname}\']/zone/entry'.format(vsysname=self.vsys_list[vsysbox_index])):
+                self.zones.append(zones.get('name'))
+
+            # Alphabetize the zone list, then populate the combo boxes
+            self.zones.sort()
+            self.ui.cbo_src_zone.addItems(self.zones)
+            self.ui.cbo_dst_zone.addItems(self.zones)
 
     ##############################################################
     # SEARCH SESSIONS
@@ -751,6 +811,7 @@ class PanSessionViewerMainWindow(QMainWindow):
             dst_intf=self.ui.cbo_dst_intf.currentText(),
             app_id=self.ui.appid.text(),
             src_user=self.ui.src_user.text(),
+            target_vsys=self.ui.cbo_vsys.currentText(),
             parent=None
         )
 
