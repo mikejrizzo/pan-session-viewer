@@ -40,12 +40,19 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>30</y>
+       <y>20</y>
        <width>321</width>
-       <height>120</height>
+       <height>131</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout">
+      <item row="2" column="1">
+       <widget class="QLineEdit" name="password">
+        <property name="echoMode">
+         <enum>QLineEdit::Password</enum>
+        </property>
+       </widget>
+      </item>
       <item row="0" column="0">
        <widget class="QLabel" name="label">
         <property name="text">
@@ -53,27 +60,13 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QLineEdit" name="ip_address"/>
-      </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="label_2">
+      <item row="3" column="1">
+       <widget class="QPushButton" name="button_connect">
         <property name="text">
-         <string>Username:</string>
+         <string>Connect</string>
         </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label_3">
-        <property name="text">
-         <string>Password</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="QLineEdit" name="password">
-        <property name="echoMode">
-         <enum>QLineEdit::Password</enum>
+        <property name="autoDefault">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
@@ -93,20 +86,62 @@
         </property>
        </spacer>
       </item>
-      <item row="3" column="1">
-       <widget class="QPushButton" name="button_connect">
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_3">
         <property name="text">
-         <string>Connect</string>
-        </property>
-        <property name="autoDefault">
-         <bool>true</bool>
+         <string>Password:</string>
         </property>
        </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>Username:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLineEdit" name="ip_address"/>
       </item>
       <item row="1" column="1">
        <widget class="QLineEdit" name="username"/>
       </item>
      </layout>
+    </widget>
+    <widget class="QLabel" name="lbl_vsys">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>180</y>
+       <width>41</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>VSYS:</string>
+     </property>
+    </widget>
+    <widget class="QComboBox" name="cbo_vsys">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>180</y>
+       <width>245</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="editable">
+      <bool>false</bool>
+     </property>
+     <property name="currentText">
+      <string/>
+     </property>
     </widget>
    </widget>
    <widget class="QGroupBox" name="groupBox_2">
@@ -264,7 +299,7 @@
       <item row="4" column="0" colspan="2">
        <widget class="QLabel" name="label_14">
         <property name="text">
-         <string>Source User</string>
+         <string>Source User:</string>
         </property>
        </widget>
       </item>
