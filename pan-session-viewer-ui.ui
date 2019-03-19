@@ -42,7 +42,7 @@
        <x>10</x>
        <y>30</y>
        <width>321</width>
-       <height>103</height>
+       <height>120</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout">
@@ -98,6 +98,9 @@
         <property name="text">
          <string>Connect</string>
         </property>
+        <property name="autoDefault">
+         <bool>true</bool>
+        </property>
        </widget>
       </item>
       <item row="1" column="1">
@@ -139,6 +142,9 @@
      <property name="text">
       <string>Search Sessions</string>
      </property>
+     <property name="autoDefault">
+      <bool>true</bool>
+     </property>
     </widget>
     <widget class="QWidget" name="layoutWidget">
      <property name="geometry">
@@ -146,7 +152,7 @@
        <x>11</x>
        <y>20</y>
        <width>331</width>
-       <height>126</height>
+       <height>157</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
@@ -208,7 +214,7 @@
        <x>350</x>
        <y>21</y>
        <width>371</width>
-       <height>126</height>
+       <height>157</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout_3">
@@ -287,6 +293,9 @@
     <property name="text">
      <string>Quit</string>
     </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QLabel" name="label_status">
     <property name="geometry">
@@ -304,27 +313,33 @@
    <widget class="QPushButton" name="button_clear_log">
     <property name="geometry">
      <rect>
-      <x>970</x>
+      <x>950</x>
       <y>240</y>
-      <width>111</width>
+      <width>131</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
      <string>Clear Log Window</string>
     </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
    </widget>
    <widget class="QPushButton" name="button_clear_session_wnd">
     <property name="geometry">
      <rect>
-      <x>870</x>
+      <x>810</x>
       <y>670</y>
-      <width>121</width>
+      <width>161</width>
       <height>23</height>
      </rect>
     </property>
     <property name="text">
      <string>Clear Session Window</string>
+    </property>
+    <property name="autoDefault">
+     <bool>true</bool>
     </property>
    </widget>
    <widget class="QTableWidget" name="tableSessions">
@@ -336,13 +351,19 @@
       <height>241</height>
      </rect>
     </property>
+    <property name="verticalScrollMode">
+     <enum>QAbstractItemView::ScrollPerPixel</enum>
+    </property>
+    <property name="horizontalScrollMode">
+     <enum>QAbstractItemView::ScrollPerPixel</enum>
+    </property>
    </widget>
    <widget class="QLabel" name="label_11">
     <property name="geometry">
      <rect>
       <x>10</x>
       <y>400</y>
-      <width>241</width>
+      <width>341</width>
       <height>16</height>
      </rect>
     </property>
@@ -350,17 +371,49 @@
      <string>Double-Click Session to View Detailed Information</string>
     </property>
    </widget>
-   <widget class="QCheckBox" name="chkbox_refresh_discovered">
+   <widget class="QCheckBox" name="chkbox_refresh_search">
     <property name="geometry">
      <rect>
-      <x>900</x>
+      <x>890</x>
       <y>390</y>
-      <width>191</width>
-      <height>17</height>
+      <width>201</width>
+      <height>20</height>
      </rect>
     </property>
     <property name="text">
-     <string>Auto-Refresh Discovered Sessions</string>
+     <string>Auto-Refresh Session Search</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="btn_refresh_existing">
+    <property name="geometry">
+     <rect>
+      <x>630</x>
+      <y>670</y>
+      <width>171</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Refresh Existing Sessions</string>
+    </property>
+    <property name="autoDefault">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_sessions_tracked">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>660</y>
+      <width>141</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Number of sessions tracked.  Includes expired sessions and sessions from previous searches.&lt;/p&gt;&lt;p&gt;Click 'Clear Session Window' to start over&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
+    <property name="text">
+     <string>Sessions Tracked: 0</string>
     </property>
    </widget>
   </widget>
@@ -385,6 +438,8 @@
   <tabstop>output_area</tabstop>
   <tabstop>button_clear_log</tabstop>
   <tabstop>tableSessions</tabstop>
+  <tabstop>chkbox_refresh_search</tabstop>
+  <tabstop>btn_refresh_existing</tabstop>
   <tabstop>button_clear_session_wnd</tabstop>
   <tabstop>button_quit</tabstop>
  </tabstops>
